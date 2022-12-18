@@ -1,0 +1,126 @@
+#pragma once
+
+#include <array>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <type_traits>
+#include <utility>
+#include <vector>
+
+namespace Common::GekkoAssembler::detail
+{
+template <typename T>
+concept StringContainer = std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>;
+
+// Hacky implementation of a case insensitive alphanumeric trie supporting extended entries
+// Standing in for std::map to support case-insensitive lookups while allowing string_views in
+// lookups
+template <typename V, char... ExtraMatches>
+class CaseInsensitiveDict
+{
+public:
+  CaseInsensitiveDict(std::initializer_list<std::pair<std::string_view, V>> const& il)
+  {
+    for (auto&& [k, v] : il)
+    {
+      Add(k, v);
+    }
+  }
+
+  template <StringContainer T>
+  V const* Find(T const& key) const
+  {
+    auto&& [last_e, it] = TryFind(key);
+    if (it == key.cend() && last_e->_val)
+    {
+      return &*last_e->_val;
+    }
+    return nullptr;
+  }
+  constexpr static size_t NUM_CONNS = 36 + sizeof...(ExtraMatches);
+  constexpr static uint32_t INVALID_CONN = static_cast<uint32_t>(-1);
+
+private:
+  struct TrieEntry
+  {
+    std::array<uint32_t, 36 + sizeof...(ExtraMatches)> _conns;
+    std::optional<V> _val;
+
+    TrieEntry() { std::fill(_conns.begin(), _conns.end(), INVALID_CONN); }
+  };
+
+  constexpr size_t IndexOf(char c) const
+  {
+    size_t idx;
+    if (std::isalpha(c))
+    {
+      idx = std::tolower(c) - 'a';
+    }
+    else if (std::isdigit(c))
+    {
+      idx = c - '0' + 26;
+    }
+    else
+    {
+      idx = 36;
+      // Expands to an equivalent for loop over ExtraMatches
+      if constexpr (sizeof...(ExtraMatches) > 0)
+      {
+        ((c != ExtraMatches ? ++idx, true : false) && ...);
+      }
+    }
+    return idx;
+  }
+
+  template <StringContainer T>
+  auto TryFind(T const& key) const -> std::pair<TrieEntry const*, decltype(key.cbegin())>
+  {
+    std::pair<TrieEntry const*, decltype(key.cbegin())> ret(&m_root_entry, key.cbegin());
+    const auto k_end = key.cend();
+
+    for (; ret.second != k_end; ret.second++)
+    {
+      const size_t idx = IndexOf(*ret.second);
+      if (idx >= NUM_CONNS || ret.first->_conns[idx] == INVALID_CONN)
+      {
+        break;
+      }
+
+      ret.first = &m_entry_pool[ret.first->_conns[idx]];
+    }
+
+    return ret;
+  }
+
+  template <StringContainer T>
+  auto TryFind(T const& key) -> std::pair<TrieEntry*, decltype(key.cbegin())>
+  {
+    auto&& [e_const, it] =
+        const_cast<CaseInsensitiveDict<V, ExtraMatches...> const*>(this)->TryFind(key);
+    return {const_cast<TrieEntry*>(e_const), it};
+  }
+
+  void Add(std::string_view key, V const& val)
+  {
+    auto&& [last_e, it] = TryFind(key);
+    if (it != key.cend())
+    {
+      for (; it != key.cend(); it++)
+      {
+        const size_t idx = IndexOf(*it);
+        if (idx >= NUM_CONNS)
+        {
+          break;
+        }
+        last_e->_conns[idx] = static_cast<uint32_t>(m_entry_pool.size());
+        last_e = &m_entry_pool.emplace_back();
+      }
+    }
+    last_e->_val = val;
+  }
+
+  TrieEntry m_root_entry;
+  std::vector<TrieEntry> m_entry_pool;
+};
+}  // namespace Common::GekkoAssembler::detail
