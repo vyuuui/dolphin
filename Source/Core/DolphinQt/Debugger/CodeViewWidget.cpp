@@ -33,6 +33,7 @@
 #include "Core/PowerPC/PPCAnalyst.h"
 #include "Core/PowerPC/PPCSymbolDB.h"
 #include "Core/PowerPC/PowerPC.h"
+#include "DolphinQt/Debugger/AssembleInstructionDialog.h"
 #include "DolphinQt/Debugger/PatchInstructionDialog.h"
 #include "DolphinQt/Host.h"
 #include "DolphinQt/Resources.h"
@@ -564,6 +565,8 @@ void CodeViewWidget::OnContextMenu()
   auto* insert_nop_action = menu->addAction(tr("Insert &nop"), this, &CodeViewWidget::OnInsertNOP);
   auto* replace_action =
       menu->addAction(tr("Re&place instruction"), this, &CodeViewWidget::OnReplaceInstruction);
+  auto* assemble_action =
+      menu->addAction(tr("Assemble instruction"), this, &CodeViewWidget::OnAssembleInstruction);
   auto* restore_action =
       menu->addAction(tr("Restore instruction"), this, &CodeViewWidget::OnRestoreInstruction);
 
@@ -592,8 +595,9 @@ void CodeViewWidget::OnContextMenu()
   run_until_menu->setEnabled(!target.isEmpty());
   follow_branch_action->setEnabled(running && GetBranchFromAddress(addr));
 
-  for (auto* action : {copy_address_action, copy_line_action, copy_hex_action, function_action,
-                       ppc_action, insert_blr_action, insert_nop_action, replace_action})
+  for (auto* action :
+       {copy_address_action, copy_line_action, copy_hex_action, function_action, ppc_action,
+        insert_blr_action, insert_nop_action, replace_action, assemble_action})
     action->setEnabled(running);
 
   for (auto* action : {symbol_rename_action, symbol_size_action, symbol_end_action})
@@ -913,6 +917,24 @@ void CodeViewWidget::OnSetSymbolEndAddress()
 
 void CodeViewWidget::OnReplaceInstruction()
 {
+  DoPatchInstruction(false);
+}
+
+void CodeViewWidget::OnAssembleInstruction()
+{
+  DoPatchInstruction(true);
+}
+
+void CodeViewWidget::DoPatchInstruction(bool assemble)
+{
+  auto run_dialog = [this]<typename T>(T&& dialog, u32 addr) {
+    if (dialog.exec() == QDialog::Accepted)
+    {
+      PowerPC::debug_interface.SetPatch(addr, dialog.GetCode());
+      Update();
+    }
+  };
+
   const u32 addr = GetContextAddress();
 
   if (!PowerPC::HostIsInstructionRAMAddress(addr))
@@ -922,12 +944,16 @@ void CodeViewWidget::OnReplaceInstruction()
   if (!read_result.valid)
     return;
 
-  PatchInstructionDialog dialog(this, addr, PowerPC::debug_interface.ReadInstruction(addr));
-
-  if (dialog.exec() == QDialog::Accepted)
+  if (assemble)
   {
-    PowerPC::debug_interface.SetPatch(addr, dialog.GetCode());
-    Update();
+    run_dialog(
+        AssembleInstructionDialog(this, addr, PowerPC::debug_interface.ReadInstruction(addr)),
+        addr);
+  }
+  else
+  {
+    run_dialog(PatchInstructionDialog(this, addr, PowerPC::debug_interface.ReadInstruction(addr)),
+               addr);
   }
 }
 
