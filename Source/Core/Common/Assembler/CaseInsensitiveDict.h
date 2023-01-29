@@ -10,9 +10,6 @@
 
 namespace Common::GekkoAssembler::detail
 {
-template <typename T>
-concept StringContainer = std::is_same_v<T, std::string> || std::is_same_v<T, std::string_view>;
-
 // Hacky implementation of a case insensitive alphanumeric trie supporting extended entries
 // Standing in for std::map to support case-insensitive lookups while allowing string_views in
 // lookups
@@ -28,7 +25,7 @@ public:
     }
   }
 
-  template <StringContainer T>
+  template <typename T>
   V const* Find(T const& key) const
   {
     auto&& [last_e, it] = TryFind(key);
@@ -73,7 +70,7 @@ private:
     return idx;
   }
 
-  template <StringContainer T>
+  template <typename T>
   auto TryFind(T const& key) const -> std::pair<TrieEntry const*, decltype(key.cbegin())>
   {
     std::pair<TrieEntry const*, decltype(key.cbegin())> ret(&m_root_entry, key.cbegin());
@@ -93,7 +90,7 @@ private:
     return ret;
   }
 
-  template <StringContainer T>
+  template <typename T>
   auto TryFind(T const& key) -> std::pair<TrieEntry*, decltype(key.cbegin())>
   {
     auto&& [e_const, it] =

@@ -13,6 +13,7 @@
 #include "Common/Assembler/AssemblerShared.h"
 #include "Common/Assembler/GekkoParser.h"
 #include "Common/Assert.h"
+#include "Common/BitUtils.h"
 
 namespace Common::GekkoAssembler::detail
 {
@@ -51,7 +52,7 @@ public:
   template <typename T>
   T& GetChunk();
 
-  template <TokenConvertable T>
+  template <typename T>
   void AddBytes(T val);
 
   void AddStringBytes(std::string_view str, bool null_term);
@@ -415,7 +416,7 @@ T& GekkoIRPlugin::GetChunk()
   return std::get<T>(m_active_block->chunks.emplace_back(T{}));
 }
 
-template <TokenConvertable T>
+template <typename T>
 void GekkoIRPlugin::AddBytes(T val)
 {
   if constexpr (std::is_integral_v<T>)
@@ -430,13 +431,13 @@ void GekkoIRPlugin::AddBytes(T val)
   else if constexpr (std::is_same_v<T, float>)
   {
     static_assert(sizeof(double) == sizeof(u64));
-    AddBytes(std::bit_cast<u32>(val));
+    AddBytes(BitCast<u32>(val));
   }
   else
   {
     // std::is_same_v<T, double>
     static_assert(sizeof(double) == sizeof(u64));
-    AddBytes(std::bit_cast<u64>(val));
+    AddBytes(BitCast<u64>(val));
   }
 }
 

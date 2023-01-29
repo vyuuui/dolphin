@@ -159,7 +159,7 @@ void ConvertStringLiteral(std::string_view literal, std::back_insert_iterator<Co
   }
 }
 
-template <std::unsigned_integral T>
+template <typename T>
 std::optional<T> eval_integral(TokenType tp, std::string_view val)
 {
   constexpr auto hex_step = [](T acc, char c) { return acc << 4 | convert_nib<T>(c); };

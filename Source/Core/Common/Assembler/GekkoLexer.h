@@ -16,11 +16,6 @@ namespace Common::GekkoAssembler::detail
 {
 void ConvertStringLiteral(std::string_view literal, std::vector<u8>& out_vec);
 
-// Could also use std::unsigned_integral || std::floating_point
-template <typename T>
-concept TokenConvertable =
-    std::is_same_v<T, u8> || std::is_same_v<T, u16> || std::is_same_v<T, u32> ||
-    std::is_same_v<T, u64> || std::is_same_v<T, float> || std::is_same_v<T, double>;
 enum class TokenType
 {
   Invalid,
@@ -80,7 +75,7 @@ struct AssemblerToken
 
   // Supported Templates:
   // u8, u16, u32, u64, float, double
-  template <TokenConvertable T>
+  template <typename T>
   std::optional<T> EvalToken() const;
 };
 
